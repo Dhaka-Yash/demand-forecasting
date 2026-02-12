@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 import joblib
 import pandas as pd
 from pathlib import Path
@@ -14,8 +15,10 @@ st.write("""
 - Reduces holding cost.
 """)
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-MODEL_DIR = BASE_DIR / "models"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+model_path = os.path.join(BASE_DIR, "models", "arima_model.pkl")
+
+model = joblib.load(model_path)
 
 
 @st.cache_resource
