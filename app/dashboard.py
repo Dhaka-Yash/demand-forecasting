@@ -28,11 +28,36 @@ MODEL_URL_ENV_KEYS = {
     "prophet_model.pkl": "MODEL_URL_PROPHET",
 }
 
+MODEL_URL_SECRET_ALIASES = {
+    "arima_model.pkl": ["arima_model.pkl", "arima", "ARIMA"],
+    "sarima_model.pkl": ["sarima_model.pkl", "sarima", "SARIMA"],
+    "prophet_model.pkl": ["prophet_model.pkl", "prophet", "PROPHET"],
+}
+
+
+def _resolve_secret_url(model_filename: str) -> str | None:
+    secret_urls = st.secrets.get("model_urls", {})
+    aliases = MODEL_URL_SECRET_ALIASES.get(model_filename, [model_filename])
+    for alias in aliases:
+        value = secret_urls.get(alias) if hasattr(secret_urls, "get") else None
+        if value:
+            return str(value)
+
+    env_key = MODEL_URL_ENV_KEYS.get(model_filename)
+    if env_key:
+        # Some deployments place these values in Streamlit secrets but not OS env vars.
+        secret_env_value = st.secrets.get(env_key)
+        if secret_env_value:
+            return str(secret_env_value)
+
+    return None
+
 
 def get_model_url(model_filename: str) -> str | None:
-    secret_urls = st.secrets.get("model_urls", {})
-    if model_filename in secret_urls:
-        return secret_urls[model_filename]
+    secret_url = _resolve_secret_url(model_filename)
+    if secret_url:
+        return secret_url
+
     env_key = MODEL_URL_ENV_KEYS.get(model_filename)
     if env_key:
         return os.getenv(env_key)
@@ -48,8 +73,9 @@ def ensure_model_available(model_filename: str) -> Path:
     if not model_url:
         raise FileNotFoundError(
             f"Model file not found: {model_path}. Configure model URL in "
-            "Streamlit secrets under [model_urls] or env vars MODEL_URL_ARIMA / "
-            "MODEL_URL_SARIMA / MODEL_URL_PROPHET."
+            "Streamlit secrets under [model_urls] using keys arima_model.pkl / "
+            "sarima_model.pkl / prophet_model.pkl (or arima/sarima/prophet), or set "
+            "MODEL_URL_ARIMA / MODEL_URL_SARIMA / MODEL_URL_PROPHET."
         )
 
     try:
