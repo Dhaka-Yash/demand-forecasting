@@ -1,8 +1,11 @@
-import streamlit as st
 import os
+from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
+
 import joblib
 import pandas as pd
-from pathlib import Path
+import streamlit as st
 
 
 st.title("Demand Forecasting Dashboard")
@@ -15,17 +18,54 @@ st.write("""
 - Reduces holding cost.
 """)
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-model_path = os.path.join(BASE_DIR, "models", "arima_model.pkl")
+BASE_DIR = Path(__file__).resolve().parents[1]
+MODEL_DIR = BASE_DIR / "models"
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-model = joblib.load(model_path)
+MODEL_URL_ENV_KEYS = {
+    "arima_model.pkl": "MODEL_URL_ARIMA",
+    "sarima_model.pkl": "MODEL_URL_SARIMA",
+    "prophet_model.pkl": "MODEL_URL_PROPHET",
+}
+
+
+def get_model_url(model_filename: str) -> str | None:
+    secret_urls = st.secrets.get("model_urls", {})
+    if model_filename in secret_urls:
+        return secret_urls[model_filename]
+    env_key = MODEL_URL_ENV_KEYS.get(model_filename)
+    if env_key:
+        return os.getenv(env_key)
+    return None
+
+
+def ensure_model_available(model_filename: str) -> Path:
+    model_path = MODEL_DIR / model_filename
+    if model_path.exists():
+        return model_path
+
+    model_url = get_model_url(model_filename)
+    if not model_url:
+        raise FileNotFoundError(
+            f"Model file not found: {model_path}. Configure model URL in "
+            "Streamlit secrets under [model_urls] or env vars MODEL_URL_ARIMA / "
+            "MODEL_URL_SARIMA / MODEL_URL_PROPHET."
+        )
+
+    try:
+        with urlopen(model_url, timeout=60) as response:
+            model_path.write_bytes(response.read())
+    except URLError as exc:
+        if model_path.exists():
+            model_path.unlink()
+        raise RuntimeError(f"Failed to download {model_filename} from {model_url}") from exc
+
+    return model_path
 
 
 @st.cache_resource
 def load_model(model_filename: str):
-    model_path = MODEL_DIR / model_filename
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
+    model_path = ensure_model_available(model_filename)
     return joblib.load(model_path)
 
 
@@ -67,6 +107,6 @@ try:
 
 except FileNotFoundError as e:
     st.error(str(e))
-    st.info("Run training first to generate model files in the models folder.")
+    st.info("Run training locally and upload models to external storage, then configure model URLs.")
 except Exception as e:
     st.error(f"Dashboard error: {e}")

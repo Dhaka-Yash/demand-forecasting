@@ -87,6 +87,27 @@ streamlit run app/dashboard.py
 
 Then open the local URL shown in terminal (usually `http://localhost:8501`).
 
+## Streamlit Cloud Deployment (Without Committing Models)
+
+Model `.pkl` files are ignored in git, so configure remote model URLs for deployment.
+
+1. Upload model files to external storage (for example: Hugging Face, S3, or Google Drive direct-download links).
+2. In Streamlit app settings, add secrets:
+
+```toml
+[model_urls]
+arima_model.pkl = "https://<your-url>/arima_model.pkl"
+sarima_model.pkl = "https://<your-url>/sarima_model.pkl"
+prophet_model.pkl = "https://<your-url>/prophet_model.pkl"
+```
+
+3. Redeploy. On first run, the app downloads models into `models/` at runtime.
+
+You can also use environment variables instead of secrets:
+- `MODEL_URL_ARIMA`
+- `MODEL_URL_SARIMA`
+- `MODEL_URL_PROPHET`
+
 ## Evaluate Forecasts
 
 The `src/evaluate.py` module provides:
@@ -104,7 +125,6 @@ The `src/evaluate.py` module provides:
 
 - `main.py` currently imports `src/train_lstm.py`, but that file does not exist in this repository.
 - Because of this, running `python main.py` will fail unless LSTM code is added or the LSTM section is removed.
-- The dashboard references `MODEL_DIR` inside `load_model`; define it (for example as the `models` folder path) before use.
 
 ## Notes
 
